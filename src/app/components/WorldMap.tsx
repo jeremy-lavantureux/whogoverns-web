@@ -43,7 +43,7 @@ export default function WorldMap({ year, countries }: Props) {
       .wg-country { cursor: pointer; transition: opacity .12s ease; }
       .wg-country:hover { opacity: .85; }
       .wg-covered { opacity: 1; }
-      .wg-not-covered { opacity: .25; }
+      .wg-not-covered { opacity: .35; }
     `;
     // Insert style as first child
     svg.insertBefore(style, svg.firstChild);
@@ -82,14 +82,17 @@ export default function WorldMap({ year, countries }: Props) {
       if (!iso3 || iso3.length !== 3) return;
 
       const data = countryByIso3[iso3];
-      const covered = Boolean(data?.covered ?? data?.coverage_status === "covered");
+      const covered = data?.country?.coverage_status === "available";
 
       node.classList.add("wg-country");
       node.classList.toggle("wg-covered", covered);
       node.classList.toggle("wg-not-covered", !covered);
 
-      const name = data?.name ?? iso3;
-      const party = data?.party?.abbr || data?.party?.name || "";
+      const name = data?.country?.name ?? iso3;
+      const party =
+		data?.power?.main_party?.abbr ||
+		data?.power?.main_party?.name ||
+		"";
       const titleText = party ? `${name} — ${party} (${year})` : `${name} (${year})`;
 
       let titleEl = node.querySelector("title") as SVGTitleElement | null;
