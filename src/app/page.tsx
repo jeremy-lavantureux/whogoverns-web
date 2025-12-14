@@ -2,6 +2,8 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import WorldMap from "./components/WorldMap";
+
 
 type MapResponse = {
   year: number;
@@ -163,6 +165,14 @@ function PageClient() {
           </p>
         )}
       </section>
+
+		{/* World map */}
+		{data && (
+		  <section className="border rounded p-4 bg-white">
+			<WorldMap year={year} countries={data.countries} />
+		  </section>
+		)}
+
 
       <section className="border rounded p-4 bg-gray-50">
         <h2 className="font-medium mb-2">Raw response (debug)</h2>
