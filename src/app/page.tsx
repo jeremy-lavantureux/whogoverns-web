@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type MapResponse = {
@@ -14,7 +14,7 @@ function toBool(v: string | null, fallback = false) {
   return v === "true" || v === "1";
 }
 
-export default function HomePage() {
+function PageClient() {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -177,5 +177,13 @@ export default function HomePage() {
         </div>
       </footer>
     </main>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<main className="p-6">Loading…</main>}>
+      <PageClient />
+    </Suspense>
   );
 }
