@@ -97,12 +97,17 @@ export default function WorldMap({ year, countries }: Props) {
       const titleText = party ? `${name} — ${party} (${year})` : `${name} (${year})`;
 
       // ensure a <title> exists
-      let titleEl = node.querySelector("title");
-      if (!titleEl) {
-        titleEl = document.createElementNS("http://www.w3.org/2000/svg", "title");
-        node.insertBefore(titleEl, node.firstChild);
-      }
-      titleEl.textContent = titleText;
+	let titleEl = node.querySelector("title") as SVGTitleElement | null;
+
+	if (!titleEl) {
+	  titleEl = document.createElementNS(
+		"http://www.w3.org/2000/svg",
+		"title"
+	  ) as SVGTitleElement;
+	  node.insertBefore(titleEl, node.firstChild);
+	}
+
+	titleEl.textContent = titleText;
     });
   }, [styledSvg, countryByIso3, year]);
 
