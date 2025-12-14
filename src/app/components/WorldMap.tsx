@@ -3,60 +3,56 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type CountryMapItem = {
-  iso3: string;
-  name?: string;
-  party?: { name?: string; abbr?: string } | null;
-  covered?: boolean;
-};
-
 type Props = {
   year: number;
   countries: Record<string, any>;
 };
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
 export default function WorldMap({ year, countries }: Props) {
   const router = useRouter();
-  const [svg, setSvg] = useState<string>("");
+  const [svgMarkup, setSvgMarkup] = useState<string>("");
 
-  // Load SVG from public/
+  // 1) Load SVG text
   useEffect(() => {
     fetch("/maps/world-iso3.svg")
       .then((r) => r.text())
-      .then(setSvg)
-      .catch(() => setSvg(""));
+      .then(setSvgMarkup)
+      .catch(() => setSvgMarkup(""));
   }, []);
 
   const countryByIso3 = useMemo(() => countries ?? {}, [countries]);
 
-  // Inject styling by ISO3 id
-  const styledSvg = useMemo(() => {
-    if (!svg) return "";
+  // 2) Build a safe SVG string (inject style + ensure sizing)
+  const renderedSvg = useMemo(() => {
+    if (!svgMarkup) return "";
 
-    // simple coloring strategy (V1):
-    // - covered countries: colored
-    // - not covered: light grey
-    // - missing key: very light
-    // you can refine later.
-    let out = svg;
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgMarkup, "image/svg+xml");
+    const svg = doc.documentElement;
 
-    // Add a base style block if not present
-    if (!out.includes("<style")) {
-      out = out.replace(
-        "<svg",
-        `<svg><style>
-          .wg-country { cursor: pointer; transition: opacity .1s ease; }
-          .wg-country:hover { opacity: .85; }
-          .wg-covered { opacity: 1; }
-          .wg-not-covered { opacity: .25; }
-        </style>`
-      );
-    }
+    // Ensure sizing: fit container
+    svg.setAttribute("width", "100%");
+    svg.setAttribute("height", "100%");
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
-    return out;
-  }, [svg]);
+    // Add CSS style inside SVG
+    const style = doc.createElementNS(SVG_NS, "style");
+    style.textContent = `
+      .wg-country { cursor: pointer; transition: opacity .12s ease; }
+      .wg-country:hover { opacity: .85; }
+      .wg-covered { opacity: 1; }
+      .wg-not-covered { opacity: .25; }
+    `;
+    // Insert style as first child
+    svg.insertBefore(style, svg.firstChild);
 
-  // Handle hover/click with event delegation
+    // Serialize back to string
+    return new XMLSerializer().serializeToString(svg);
+  }, [svgMarkup]);
+
+  // 3) Click handler (event delegation)
   useEffect(() => {
     const root = document.getElementById("wg-map-root");
     if (!root) return;
@@ -64,6 +60,7 @@ export default function WorldMap({ year, countries }: Props) {
     const onClick = (e: any) => {
       const el = e.target as HTMLElement | null;
       if (!el) return;
+
       const iso3 = el.getAttribute("id");
       if (!iso3 || iso3.length !== 3) return;
 
@@ -74,13 +71,13 @@ export default function WorldMap({ year, countries }: Props) {
     return () => root.removeEventListener("click", onClick);
   }, [router, year]);
 
-  // After SVG is mounted, apply classes + title tooltips
+  // 4) Apply classes + titles after mount/update
   useEffect(() => {
     const container = document.getElementById("wg-map-root");
     if (!container) return;
 
-    const paths = container.querySelectorAll("path[id], g[id]");
-    paths.forEach((node: Element) => {
+    const nodes = container.querySelectorAll("path[id], g[id]");
+    nodes.forEach((node: Element) => {
       const iso3 = node.getAttribute("id");
       if (!iso3 || iso3.length !== 3) return;
 
@@ -91,34 +88,29 @@ export default function WorldMap({ year, countries }: Props) {
       node.classList.toggle("wg-covered", covered);
       node.classList.toggle("wg-not-covered", !covered);
 
-      // tooltip text
       const name = data?.name ?? iso3;
       const party = data?.party?.abbr || data?.party?.name || "";
       const titleText = party ? `${name} — ${party} (${year})` : `${name} (${year})`;
 
-      // ensure a <title> exists
-	let titleEl = node.querySelector("title") as SVGTitleElement | null;
-
-	if (!titleEl) {
-	  titleEl = document.createElementNS(
-		"http://www.w3.org/2000/svg",
-		"title"
-	  ) as SVGTitleElement;
-	  node.insertBefore(titleEl, node.firstChild);
-	}
-
-	titleEl.textContent = titleText;
+      let titleEl = node.querySelector("title") as SVGTitleElement | null;
+      if (!titleEl) {
+        titleEl = document.createElementNS(SVG_NS, "title") as SVGTitleElement;
+        node.insertBefore(titleEl, node.firstChild);
+      }
+      titleEl.textContent = titleText;
     });
-  }, [styledSvg, countryByIso3, year]);
+  }, [renderedSvg, countryByIso3, year]);
 
-  if (!svg) return <div className="border rounded p-4">Loading map…</div>;
+  if (!svgMarkup) return <div className="border rounded p-4 bg-white">Loading map…</div>;
 
   return (
-    <div
-      id="wg-map-root"
-      className="border rounded bg-white p-2 overflow-auto"
-      // eslint-disable-next-line react/no-danger
-      dangerouslySetInnerHTML={{ __html: styledSvg }}
-    />
+    <section className="border rounded p-4 bg-white">
+      <div
+        id="wg-map-root"
+        style={{ width: "100%", height: "600px", overflow: "hidden" }}
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: renderedSvg }}
+      />
+    </section>
   );
 }
