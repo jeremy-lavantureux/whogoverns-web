@@ -29,3 +29,7 @@ This repository contains the **frontend web application**, built with modern web
 - Incremental and long-term approach
 
 This project is under active development.
+
+## License
+
+This project is licensed under the MIT License.
