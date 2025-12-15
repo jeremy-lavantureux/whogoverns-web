@@ -1,7 +1,3 @@
-"use client";
-
-import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
 import countriesLib from "i18n-iso-countries";
 import en from "i18n-iso-countries/langs/en.json";
 
@@ -37,61 +33,75 @@ type EventItem = {
   title: string;
 };
 
-export default function CountryPage() {
-  const { iso3 } = useParams<{ iso3: string }>();
-  const sp = useSearchParams();
+const apiBase = process.env.NEXT_PUBLIC_API_BASE || "https://api.whogoverns.org";
 
-  const year =
-    Number(sp.get("year")) ||
-    Math.min(2025, Math.max(1945, new Date().getFullYear()));
+function clampYear(y: number) {
+  return Math.min(2025, Math.max(1945, y));
+}
 
-  const iso3Upper = iso3.toUpperCase();
-  const iso2 = countriesLib.alpha3ToAlpha2(iso3Upper);
+/**
+ * Required for `output: "export"` with dynamic routes.
+ * We generate pages only for covered countries (V1).
+ */
+export async function generateStaticParams() {
+  // Option A: get list from metadata endpoint if you have it
+  // If metadata is not available, fallback to a small list.
+  try {
+    const res = await fetch(`${apiBase}/v1/metadata/countries`, {
+      // build-time fetch: no cache needed
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error("metadata not available");
+    const json = await res.json();
+
+    // Expecting: { countries: [{ iso3, coverage_status, ... }, ...] }
+    const list: string[] =
+      (json.countries ?? [])
+        .filter((c: any) => c?.coverage_status === "available")
+        .map((c: any) => String(c.iso3).toUpperCase()) ?? [];
+
+    // Ensure we return unique ISO3
+    return Array.from(new Set(list)).map((iso3) => ({ iso3 }));
+  } catch {
+    // Fallback minimal V1 list (safe)
+    return ["FRA", "DEU", "USA", "RWA"].map((iso3) => ({ iso3 }));
+  }
+}
+
+// Static export can't read query params at runtime reliably,
+// so we render a default year page (current year) and keep it simple for V1.
+// We'll add a year switcher later via client component if needed.
+export default async function CountryPage({
+  params,
+}: {
+  params: { iso3: string };
+}) {
+  const iso3 = params.iso3.toUpperCase();
+
+  const year = clampYear(new Date().getFullYear());
+
+  const iso2 = countriesLib.alpha3ToAlpha2(iso3);
   const countryName =
     (iso2 &&
       (countriesLib.getName(iso2, "fr") ||
         countriesLib.getName(iso2, "en"))) ||
-    iso3Upper;
+    iso3;
 
-  const apiBase =
-    process.env.NEXT_PUBLIC_API_BASE || "https://api.whogoverns.org";
+  const [countryRes, timelineRes, eventsRes] = await Promise.all([
+    fetch(`${apiBase}/v1/country/${iso3}?year=${year}&from=${year - 8}&to=${year}`, {
+      cache: "no-store",
+    }).then((r) => r.json()),
+    fetch(`${apiBase}/v1/timeline/${iso3}?from=${year - 8}&to=${year}`, {
+      cache: "no-store",
+    }).then((r) => r.json()),
+    fetch(`${apiBase}/v1/events/${iso3}?from=${year - 8}&to=${year}`, {
+      cache: "no-store",
+    }).then((r) => r.json()),
+  ]);
 
-  const [power, setPower] = useState<Power | null>(null);
-  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-
-    Promise.all([
-      fetch(
-        `${apiBase}/v1/country/${iso3Upper}?year=${year}&from=${
-          year - 8
-        }&to=${year}`
-      ).then((r) => r.json()),
-      fetch(
-        `${apiBase}/v1/timeline/${iso3Upper}?from=${year - 8}&to=${year}`
-      ).then((r) => r.json()),
-      fetch(
-        `${apiBase}/v1/events/${iso3Upper}?from=${year - 8}&to=${year}`
-      ).then((r) => r.json()),
-    ])
-      .then(([countryRes, timelineRes, eventsRes]) => {
-        setPower(countryRes.power ?? null);
-        setTimeline(timelineRes.years ?? []);
-        setEvents(eventsRes.events ?? []);
-      })
-      .finally(() => setLoading(false));
-  }, [apiBase, iso3Upper, year]);
-
-  if (loading) {
-    return (
-      <main className="max-w-4xl mx-auto p-6">
-        <p>Chargement…</p>
-      </main>
-    );
-  }
+  const power: Power | null = countryRes.power ?? null;
+  const timeline: TimelineItem[] = timelineRes.years ?? [];
+  const events: EventItem[] = eventsRes.events ?? [];
 
   return (
     <main className="max-w-4xl mx-auto p-6 space-y-8">
