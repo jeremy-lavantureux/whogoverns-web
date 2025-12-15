@@ -4,37 +4,31 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import WorldMap from "./components/WorldMap";
 
-
 type MapResponse = {
   year: number;
   countries: Record<string, any>;
-  meta?: any;
 };
-
-function toBool(v: string | null, fallback = false) {
-  if (v === null) return fallback;
-  return v === "true" || v === "1";
-}
 
 function PageClient() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  const yearFromUrl = Number(sp.get("year") ?? "2020");
-  const continentFromUrl = sp.get("continent") ?? "";
-  const groupFromUrl = sp.get("group") ?? "";
-  const coveredOnlyFromUrl = toBool(sp.get("covered_only"), false);
+  const initialYear = Number(sp.get("year") ?? "2020");
+  const initialContinent = sp.get("continent") ?? "";
+  const initialGroup = sp.get("group") ?? "";
+  const initialCoveredOnly = sp.get("covered_only") === "true";
 
-  const [year, setYear] = useState<number>(yearFromUrl);
-  const [continent, setContinent] = useState<string>(continentFromUrl);
-  const [group, setGroup] = useState<string>(groupFromUrl);
-  const [coveredOnly, setCoveredOnly] = useState<boolean>(coveredOnlyFromUrl);
+  const [year, setYear] = useState<number>(initialYear);
+  const [continent, setContinent] = useState<string>(initialContinent);
+  const [group, setGroup] = useState<string>(initialGroup);
+  const [coveredOnly, setCoveredOnly] = useState<boolean>(initialCoveredOnly);
 
   const [data, setData] = useState<MapResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE!;
+  const apiBase =
+    process.env.NEXT_PUBLIC_API_BASE || "https://api.whogoverns.org";
 
   const apiUrl = useMemo(() => {
     const u = new URL("/v1/map", apiBase);
@@ -45,7 +39,7 @@ function PageClient() {
     return u.toString();
   }, [apiBase, year, continent, group, coveredOnly]);
 
-  // keep URL shareable
+  // Keep URL shareable
   useEffect(() => {
     const u = new URL(window.location.href);
     u.searchParams.set("year", String(year));
@@ -62,7 +56,7 @@ function PageClient() {
     router.replace(u.pathname + u.search, { scroll: false });
   }, [year, continent, group, coveredOnly, router]);
 
-  // fetch data
+  // Fetch
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -78,7 +72,7 @@ function PageClient() {
       })
       .catch((e) => {
         if (!cancelled) {
-          setError(String(e));
+          setError(e instanceof Error ? `${e.name}: ${e.message}` : String(e));
           setData(null);
         }
       })
@@ -91,20 +85,21 @@ function PageClient() {
     };
   }, [apiUrl]);
 
-  const countryCount = data ? Object.keys(data.countries ?? {}).length : 0;
-
   return (
-    <main className="mx-auto max-w-5xl p-6 space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">WhoGoverns — Map (V1 debug)</h1>
-        <p className="text-sm text-gray-600">
-          API: <span className="font-mono">{apiUrl}</span>
+    <main className="mx-auto max-w-6xl p-6 space-y-6">
+      {/* Bandeau haut */}
+      <header className="border rounded bg-white p-6 space-y-2">
+        <h1 className="text-2xl font-semibold">WhoGoverns</h1>
+        <p className="text-sm text-gray-700">
+          Visualisez, par année, le parti au pouvoir par pays. La couverture est
+          étendue progressivement (V1 : OCDE + UE).
         </p>
       </header>
 
-      <section className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+      {/* Filtres */}
+      <section className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end border rounded bg-white p-4">
         <div>
-          <label className="block text-sm font-medium">Year: {year}</label>
+          <label className="block text-sm font-medium">Année : {year}</label>
           <input
             className="w-full"
             type="range"
@@ -122,27 +117,26 @@ function PageClient() {
             value={continent}
             onChange={(e) => setContinent(e.target.value)}
           >
-            <option value="">All</option>
-            <option value="AF">Africa</option>
+            <option value="">Monde</option>
+            <option value="AF">Afrique</option>
             <option value="EU">Europe</option>
-            <option value="NA">North America</option>
-            <option value="SA">South America</option>
-            <option value="AS">Asia</option>
-            <option value="OC">Oceania</option>
-            <option value="AN">Antarctica</option>
+            <option value="NA">Amérique du Nord</option>
+            <option value="SA">Amérique du Sud</option>
+            <option value="AS">Asie</option>
+            <option value="OC">Océanie</option>
           </select>
         </div>
 
         <div>
-          <label className="block text-sm font-medium">Group</label>
+          <label className="block text-sm font-medium">Groupe</label>
           <select
             className="w-full border rounded px-3 py-2"
             value={group}
             onChange={(e) => setGroup(e.target.value)}
           >
-            <option value="">All</option>
-            <option value="EU">EU</option>
-            <option value="OECD">OECD</option>
+            <option value="">Tous</option>
+            <option value="EU">UE</option>
+            <option value="OECD">OCDE</option>
           </select>
         </div>
 
@@ -152,47 +146,39 @@ function PageClient() {
             checked={coveredOnly}
             onChange={(e) => setCoveredOnly(e.target.checked)}
           />
-          Covered only
+          Pays couverts uniquement
         </label>
       </section>
 
+      {/* Status */}
       <section className="border rounded p-4 bg-white">
-        {loading && <p>Loading…</p>}
-        {error && <p className="text-red-600">Error: {error}</p>}
+        {loading && <p>Chargement…</p>}
+        {error && <p className="text-red-600">Erreur : {error}</p>}
         {!loading && !error && data && (
           <p className="text-sm text-gray-700">
-            Loaded year <b>{data.year}</b> — countries returned: <b>{countryCount}</b>
+            Année <b>{data.year}</b> — pays retournés :{" "}
+            <b>{Object.keys(data.countries ?? {}).length}</b>
           </p>
         )}
       </section>
 
-		{/* World map */}
-		{data && (
-		  <section className="border rounded p-4 bg-white">
-			<WorldMap year={year} countries={data.countries} />
-		  </section>
-		)}
+      {/* Carte */}
+      {data && <WorldMap year={year} countries={data.countries} />}
 
-
-      <section className="border rounded p-4 bg-gray-50">
-        <h2 className="font-medium mb-2">Raw response (debug)</h2>
-        <pre className="text-xs overflow-auto">
-          {data ? JSON.stringify(data, null, 2) : "No data"}
-        </pre>
-      </section>
-
-      <footer className="border-t pt-4 text-sm text-gray-600">
-        <div className="border rounded p-3 bg-white">
-          Ad placeholder (V1) — will be replaced by a discreet banner.
+      {/* Footer */}
+      <footer className="border-t pt-6 text-sm text-gray-600">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+          <div>© {new Date().getFullYear()} WhoGoverns</div>
+          <div className="text-gray-500">V1 : OCDE + UE</div>
         </div>
       </footer>
     </main>
   );
 }
 
-export default function HomePage() {
+export default function Page() {
   return (
-    <Suspense fallback={<main className="p-6">Loading…</main>}>
+    <Suspense fallback={<main className="p-6">Chargement…</main>}>
       <PageClient />
     </Suspense>
   );
