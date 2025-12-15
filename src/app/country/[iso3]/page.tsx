@@ -39,44 +39,35 @@ function clampYear(y: number) {
   return Math.min(2025, Math.max(1945, y));
 }
 
-/**
- * Required for `output: "export"` with dynamic routes.
- * We generate pages only for covered countries (V1).
- */
 export async function generateStaticParams() {
-  // Option A: get list from metadata endpoint if you have it
-  // If metadata is not available, fallback to a small list.
   try {
     const res = await fetch(`${apiBase}/v1/metadata/countries`, {
-      // build-time fetch: no cache needed
       cache: "no-store",
     });
     if (!res.ok) throw new Error("metadata not available");
     const json = await res.json();
 
-    // Expecting: { countries: [{ iso3, coverage_status, ... }, ...] }
-    const list: string[] =
-      (json.countries ?? [])
-        .filter((c: any) => c?.coverage_status === "available")
-        .map((c: any) => String(c.iso3).toUpperCase()) ?? [];
+    const list: string[] = (json.countries ?? [])
+      .filter((c: any) => c?.coverage_status === "available" && c?.iso3)
+      .map((c: any) => String(c.iso3).trim().toUpperCase())
+      .filter((v: string) => v.length === 3);
 
-    // Ensure we return unique ISO3
-    return Array.from(new Set(list)).map((iso3) => ({ iso3 }));
+    const unique = Array.from(new Set(list));
+    if (unique.length === 0) throw new Error("empty list");
+
+    return unique.map((iso3) => ({ iso3 }));
   } catch {
-    // Fallback minimal V1 list (safe)
     return ["FRA", "DEU", "USA", "RWA"].map((iso3) => ({ iso3 }));
   }
 }
 
-// Static export can't read query params at runtime reliably,
-// so we render a default year page (current year) and keep it simple for V1.
-// We'll add a year switcher later via client component if needed.
 export default async function CountryPage({
   params,
 }: {
-  params: { iso3: string };
+  params?: { iso3?: string };
 }) {
-  const iso3 = params.iso3.toUpperCase();
+  // Defensive: never crash build if params is missing
+  const iso3 = String(params?.iso3 ?? "FRA").trim().toUpperCase();
 
   const year = clampYear(new Date().getFullYear());
 
@@ -87,25 +78,30 @@ export default async function CountryPage({
         countriesLib.getName(iso2, "en"))) ||
     iso3;
 
+  const safeFetchJson = async (url: string) => {
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) return null;
+      return await r.json();
+    } catch {
+      return null;
+    }
+  };
+
   const [countryRes, timelineRes, eventsRes] = await Promise.all([
-    fetch(`${apiBase}/v1/country/${iso3}?year=${year}&from=${year - 8}&to=${year}`, {
-      cache: "no-store",
-    }).then((r) => r.json()),
-    fetch(`${apiBase}/v1/timeline/${iso3}?from=${year - 8}&to=${year}`, {
-      cache: "no-store",
-    }).then((r) => r.json()),
-    fetch(`${apiBase}/v1/events/${iso3}?from=${year - 8}&to=${year}`, {
-      cache: "no-store",
-    }).then((r) => r.json()),
+    safeFetchJson(
+      `${apiBase}/v1/country/${iso3}?year=${year}&from=${year - 8}&to=${year}`
+    ),
+    safeFetchJson(`${apiBase}/v1/timeline/${iso3}?from=${year - 8}&to=${year}`),
+    safeFetchJson(`${apiBase}/v1/events/${iso3}?from=${year - 8}&to=${year}`),
   ]);
 
-  const power: Power | null = countryRes.power ?? null;
-  const timeline: TimelineItem[] = timelineRes.years ?? [];
-  const events: EventItem[] = eventsRes.events ?? [];
+  const power: Power | null = (countryRes as any)?.power ?? null;
+  const timeline: TimelineItem[] = (timelineRes as any)?.years ?? [];
+  const events: EventItem[] = (eventsRes as any)?.events ?? [];
 
   return (
     <main className="max-w-4xl mx-auto p-6 space-y-8">
-      {/* Header */}
       <header className="flex items-center gap-4">
         {iso2 && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -122,10 +118,8 @@ export default async function CountryPage({
         </div>
       </header>
 
-      {/* Power */}
       <section className="border rounded bg-white p-4 space-y-2">
         <h2 className="font-medium">Pouvoir en place</h2>
-
         {power ? (
           <>
             <p>
@@ -145,14 +139,12 @@ export default async function CountryPage({
             )}
           </>
         ) : (
-          <p>Données non disponibles pour cette année.</p>
+          <p>Données non disponibles.</p>
         )}
       </section>
 
-      {/* Timeline */}
       <section className="border rounded bg-white p-4">
         <h2 className="font-medium mb-3">Évolution récente</h2>
-
         {timeline.length === 0 ? (
           <p>Aucune donnée disponible.</p>
         ) : (
@@ -167,10 +159,8 @@ export default async function CountryPage({
         )}
       </section>
 
-      {/* Events */}
       <section className="border rounded bg-white p-4">
         <h2 className="font-medium mb-3">Événements politiques</h2>
-
         {events.length === 0 ? (
           <p>Aucun événement renseigné.</p>
         ) : (
