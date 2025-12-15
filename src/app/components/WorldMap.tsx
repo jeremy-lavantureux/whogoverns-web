@@ -77,10 +77,13 @@ export default function WorldMap({ year, countries }: Props) {
 
     const nodes = container.querySelectorAll("path[id], g[id]");
     nodes.forEach((node: Element) => {
-      const iso3 = node.getAttribute("id");
-      if (!iso3 || iso3.length !== 3) return;
+      const raw = node.getAttribute("id");
+		if (!raw) return;
 
-      const data = countryByIso3[iso3];
+		const iso3 = raw.trim().toUpperCase();
+		if (iso3.length !== 3) return;
+
+		const data = countryByIso3[iso3];
       const available = data?.country?.coverage_status === "available";
 
       node.classList.add("wg-country");
@@ -91,7 +94,11 @@ export default function WorldMap({ year, countries }: Props) {
 
   // Hover + tooltip + click
   useEffect(() => {
-    const root = document.getElementById("wg-map-root");
+    const hideTooltip = () => setTt((prev) => ({ ...prev, visible: false }));
+	root.addEventListener("mouseleave", hideTooltip);
+	window.addEventListener("scroll", hideTooltip, true);
+
+	const root = document.getElementById("wg-map-root");
     if (!root) return;
 
     const getIso3 = (e: any) => {
@@ -99,7 +106,7 @@ export default function WorldMap({ year, countries }: Props) {
       if (!el) return null;
       const iso3 = el.getAttribute("id");
       if (!iso3 || iso3.length !== 3) return null;
-      return iso3.toUpperCase();
+      return iso3.trim().toUpperCase();
     };
 
     const clamp = (v: number, min: number, max: number) =>
@@ -121,7 +128,15 @@ export default function WorldMap({ year, countries }: Props) {
       if (!iso3) return;
 
       const data = countryByIso3[iso3];
-      const name = data?.country?.name ?? iso3;
+      let name = data?.country?.name;
+
+		if (!name) {
+		  const iso2 = countriesLib.alpha3ToAlpha2(iso3);
+		  if (iso2) name = countriesLib.getName(iso2, "fr") || countriesLib.getName(iso2, "en") || undefined;
+		}
+
+		if (!name) name = "Pays";
+
       const available = data?.country?.coverage_status === "available";
 
       const leader = data?.power?.leader_name || null;
@@ -131,9 +146,8 @@ export default function WorldMap({ year, countries }: Props) {
         null;
 
       const iso2 = countriesLib.alpha3ToAlpha2(iso3);
-      const flagUrl = iso2
-        ? `https://flagcdn.com/24x18/${iso2.toLowerCase()}.png`
-        : null;
+	  const flagUrl = iso2 ? `https://flagcdn.com/24x18/${iso2.toLowerCase()}.png` : null;
+
 
       const line2 = available
         ? `${leader ?? "—"} — ${partyName ?? "—"}`
@@ -175,6 +189,8 @@ export default function WorldMap({ year, countries }: Props) {
       root.removeEventListener("mouseover", onMouseOver);
       root.removeEventListener("mouseout", onMouseOut);
       root.removeEventListener("click", onClick);
+	  root.removeEventListener("mouseleave", hideTooltip);
+	  window.removeEventListener("scroll", hideTooltip, true);
     };
   }, [router, year, tt.visible, countryByIso3]);
 
