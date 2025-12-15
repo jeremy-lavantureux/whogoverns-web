@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import CountryClient from "./CountryClient";
 
 const apiBase =
@@ -30,5 +31,16 @@ export default function CountryPage({
   params: { iso3: string };
 }) {
   const iso3 = String(params?.iso3 ?? "FRA").trim().toUpperCase();
-  return <CountryClient iso3={iso3} />;
+
+  return (
+    <Suspense
+      fallback={
+        <main className="max-w-4xl mx-auto p-6">
+          <p>Loading…</p>
+        </main>
+      }
+    >
+      <CountryClient iso3={iso3} />
+    </Suspense>
+  );
 }
