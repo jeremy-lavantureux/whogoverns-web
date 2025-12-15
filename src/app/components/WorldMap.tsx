@@ -94,12 +94,14 @@ export default function WorldMap({ year, countries }: Props) {
 
   // Hover + tooltip + click
   useEffect(() => {
-    const hideTooltip = () => setTt((prev) => ({ ...prev, visible: false }));
-	root.addEventListener("mouseleave", hideTooltip);
-	window.addEventListener("scroll", hideTooltip, true);
-
 	const root = document.getElementById("wg-map-root");
     if (!root) return;
+	
+	const hideTooltip = () => setTt((prev) => ({ ...prev, visible: false }));
+	
+	// Hide tooltip if leaving the map aera
+	root.addEventListener("mouseleave", hideTooltip);
+	window.addEventListener("scroll", hideTooltip, true);
 
     const getIso3 = (e: any) => {
       const el = e.target as HTMLElement | null;
@@ -185,12 +187,13 @@ export default function WorldMap({ year, countries }: Props) {
     root.addEventListener("click", onClick);
 
     return () => {
-      root.removeEventListener("mousemove", onMouseMove as any);
+      root.removeEventListener("mouseleave", hideTooltip);
+	  window.removeEventListener("scroll", hideTooltip, true);
+	  root.removeEventListener("mousemove", onMouseMove as any);
       root.removeEventListener("mouseover", onMouseOver);
       root.removeEventListener("mouseout", onMouseOut);
       root.removeEventListener("click", onClick);
-	  root.removeEventListener("mouseleave", hideTooltip);
-	  window.removeEventListener("scroll", hideTooltip, true);
+
     };
   }, [router, year, tt.visible, countryByIso3]);
 
