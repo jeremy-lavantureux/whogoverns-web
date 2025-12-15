@@ -190,16 +190,24 @@ export default function WorldMap({ year, countries }: Props) {
       });
     };
 
-    const onClick = (e: MouseEvent) => {
-      const iso3 = getIso3(e);
-      if (!iso3) return;
-      router.push(`/country/${iso3}?year=${year}`);
-    };
+	const onNavigate = (e: PointerEvent) => {
+	  const iso3 = getIso3(e);
+	  if (!iso3) return;
+
+	  const url = `/country/${iso3}?year=${year}`;
+
+	  // Navigation client si possible, sinon fallback
+	  try {
+		router.push(url);
+	  } catch {
+		window.location.assign(url);
+	  }
+	};
 
     // Événements : pointer* = plus stable sur SVG
     root.addEventListener("pointermove", onPointerMove as any);
     root.addEventListener("pointerover", onPointerOver as any);
-    root.addEventListener("click", onClick);
+    root.addEventListener("pointerup", onNavigate as any);
 
     root.addEventListener("mouseleave", hideTooltip);
     window.addEventListener("scroll", hideTooltip, true);
@@ -207,7 +215,7 @@ export default function WorldMap({ year, countries }: Props) {
     return () => {
       root.removeEventListener("pointermove", onPointerMove as any);
       root.removeEventListener("pointerover", onPointerOver as any);
-      root.removeEventListener("click", onClick);
+      root.removeEventListener("pointerup", onNavigate as any);
 
       root.removeEventListener("mouseleave", hideTooltip);
       window.removeEventListener("scroll", hideTooltip, true);
