@@ -22,6 +22,7 @@ type TooltipState = {
   flagUrl: string | null;
   line2: string;
   available: boolean;
+  iso3: string | null;
 };
 
 export default function WorldMap({ year, countries }: Props) {
@@ -36,6 +37,7 @@ export default function WorldMap({ year, countries }: Props) {
     flagUrl: null,
     line2: "",
     available: false,
+    iso3: null,
   });
 
   useEffect(() => {
@@ -61,11 +63,11 @@ export default function WorldMap({ year, countries }: Props) {
     const style = doc.createElementNS(SVG_NS, "style");
     style.textContent = `
       .wg-country { cursor: pointer; transition: opacity .12s ease; }
-	  .wg-covered { opacity: 1; }
-	  .wg-not-covered { opacity: .22; }
-	  
-	  .wg-covered:hover { opacity: .90; }
-	  .wg-not-covered:hover { opacity: .35; }
+      .wg-covered { opacity: 1; }
+      .wg-not-covered { opacity: .22; }
+
+      .wg-covered:hover { opacity: .90; }
+      .wg-not-covered:hover { opacity: .35; }
     `;
     svg.insertBefore(style, svg.firstChild);
 
@@ -80,12 +82,12 @@ export default function WorldMap({ year, countries }: Props) {
     const nodes = container.querySelectorAll("path[id], g[id]");
     nodes.forEach((node: Element) => {
       const raw = node.getAttribute("id");
-		if (!raw) return;
+      if (!raw) return;
 
-		const iso3 = raw.trim().toUpperCase();
-		if (iso3.length !== 3) return;
+      const iso3 = raw.trim().toUpperCase();
+      if (iso3.length !== 3) return;
 
-		const data = countryByIso3[iso3];
+      const data = countryByIso3[iso3];
       const available = data?.country?.coverage_status === "available";
 
       node.classList.add("wg-country");
@@ -96,58 +98,67 @@ export default function WorldMap({ year, countries }: Props) {
 
   // Hover + tooltip + click
   useEffect(() => {
-	const root = document.getElementById("wg-map-root");
+    const root = document.getElementById("wg-map-root");
     if (!root) return;
-	
-	const hideTooltip = () => setTt((prev) => ({ ...prev, visible: false }));
-	
-	// Hide tooltip if leaving the map aera
-	root.addEventListener("mouseleave", hideTooltip);
-	window.addEventListener("scroll", hideTooltip, true);
-
-	const getIso3 = (e: any) => {
-	  const el = e.target as Element | null;
-	  if (!el) return null;
-
-	  // Remonte jusqu’à un élément SVG qui a un id
-	  const withId = el.closest("path[id], g[id]") as Element | null;
-	  if (!withId) return null;
-
-	  const raw = withId.getAttribute("id");
-	  if (!raw) return null;
-
-	  const iso3 = raw.trim().toUpperCase();
-	  if (iso3.length !== 3) return null;
-	  return iso3;
-	};
 
     const clamp = (v: number, min: number, max: number) =>
       Math.max(min, Math.min(max, v));
 
-    const onMouseMove = (e: MouseEvent) => {
-      if (!tt.visible) return;
+    const positionFromEvent = (e: MouseEvent) => {
       const maxX = window.innerWidth - 340;
       const maxY = window.innerHeight - 120;
-      setTt((prev) => ({
-        ...prev,
+      return {
         x: clamp(e.clientX + 12, 8, maxX),
         y: clamp(e.clientY + 12, 8, maxY),
-      }));
+      };
     };
 
-    const onMouseOver = (e: any) => {
+    const hideTooltip = () =>
+      setTt((prev) => ({ ...prev, visible: false, iso3: null }));
+
+    const getIso3 = (e: any) => {
+      const el = e.target as Element | null;
+      if (!el) return null;
+
+      // Remonte jusqu’à l’élément qui porte l’id ISO3
+      const withId = el.closest("path[id], g[id]") as Element | null;
+      if (!withId) return null;
+
+      const raw = withId.getAttribute("id");
+      if (!raw) return null;
+
+      const iso3 = raw.trim().toUpperCase();
+      if (iso3.length !== 3) return null;
+      return iso3;
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      // Met à jour la position si visible
+      if (!tt.visible) return;
+      const pos = positionFromEvent(e as unknown as MouseEvent);
+      setTt((prev) => ({ ...prev, x: pos.x, y: pos.y }));
+    };
+
+    const onPointerOver = (e: PointerEvent) => {
       const iso3 = getIso3(e);
       if (!iso3) return;
 
+      // Si on survole le même pays, ne pas recalculer en boucle
+      if (tt.visible && tt.iso3 === iso3) return;
+
       const data = countryByIso3[iso3];
-      let name = data?.country?.name;
 
-		if (!name) {
-		  const iso2 = countriesLib.alpha3ToAlpha2(iso3);
-		  if (iso2) name = countriesLib.getName(iso2, "fr") || countriesLib.getName(iso2, "en") || undefined;
-		}
+      // Nom complet : priorité DB, sinon fallback ISO2->name
+      let name: string | undefined = data?.country?.name;
+      const iso2 = countriesLib.alpha3ToAlpha2(iso3);
 
-		if (!name) name = "Pays";
+      if (!name && iso2) {
+        name =
+          countriesLib.getName(iso2, "fr") ||
+          countriesLib.getName(iso2, "en") ||
+          undefined;
+      }
+      if (!name) name = "Pays";
 
       const available = data?.country?.coverage_status === "available";
 
@@ -157,54 +168,51 @@ export default function WorldMap({ year, countries }: Props) {
         data?.power?.main_party?.abbr ||
         null;
 
-      const iso2 = countriesLib.alpha3ToAlpha2(iso3);
-	  const flagUrl = iso2 ? `https://flagcdn.com/24x18/${iso2.toLowerCase()}.png` : null;
-
+      const flagUrl = iso2
+        ? `https://flagcdn.com/24x18/${iso2.toLowerCase()}.png`
+        : null;
 
       const line2 = available
         ? `${leader ?? "—"} — ${partyName ?? "—"}`
         : "Données en cours de traitement";
 
-      const maxX = window.innerWidth - 340;
-      const maxY = window.innerHeight - 120;
+      const pos = positionFromEvent(e as unknown as MouseEvent);
 
       setTt({
         visible: true,
-        x: clamp((e as MouseEvent).clientX + 12, 8, maxX),
-        y: clamp((e as MouseEvent).clientY + 12, 8, maxY),
+        x: pos.x,
+        y: pos.y,
         name,
         flagUrl,
         line2,
         available,
+        iso3,
       });
     };
 
-    const onMouseOut = (e: any) => {
-      const iso3 = getIso3(e);
-      if (!iso3) return;
-      setTt((prev) => ({ ...prev, visible: false }));
-    };
-
-    const onClick = (e: any) => {
+    const onClick = (e: MouseEvent) => {
       const iso3 = getIso3(e);
       if (!iso3) return;
       router.push(`/country/${iso3}?year=${year}`);
     };
 
-    root.addEventListener("mousemove", onMouseMove as any);
-    root.addEventListener("mouseover", onMouseOver);
-    root.addEventListener("mouseout", onMouseOut);
+    // Événements : pointer* = plus stable sur SVG
+    root.addEventListener("pointermove", onPointerMove as any);
+    root.addEventListener("pointerover", onPointerOver as any);
     root.addEventListener("click", onClick);
 
+    root.addEventListener("mouseleave", hideTooltip);
+    window.addEventListener("scroll", hideTooltip, true);
+
     return () => {
-      root.removeEventListener("mouseleave", hideTooltip);
-	  window.removeEventListener("scroll", hideTooltip, true);
-	  root.removeEventListener("mousemove", onMouseMove as any);
-      root.removeEventListener("mouseover", onMouseOver);
-      root.removeEventListener("mouseout", onMouseOut);
+      root.removeEventListener("pointermove", onPointerMove as any);
+      root.removeEventListener("pointerover", onPointerOver as any);
       root.removeEventListener("click", onClick);
 
+      root.removeEventListener("mouseleave", hideTooltip);
+      window.removeEventListener("scroll", hideTooltip, true);
     };
+    // Important: pas de dépendance sur tt.visible / tt.iso3 pour éviter de réinstaller les listeners
   }, [router, year, countryByIso3]);
 
   if (!svgMarkup) {
