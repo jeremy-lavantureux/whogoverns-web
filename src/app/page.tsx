@@ -13,7 +13,8 @@ function PageClient() {
   const router = useRouter();
   const sp = useSearchParams();
 
-  const initialYear = Number(sp.get("year") ?? "2020");
+  const currentYear = Math.min(2025, Math.max(1945, new Date().getFullYear()));
+  const initialYear = Number(sp.get("year") ?? String(currentYear));
   const initialContinent = sp.get("continent") ?? "";
   const initialGroup = sp.get("group") ?? "";
   const initialCoveredOnly = sp.get("covered_only") === "true";

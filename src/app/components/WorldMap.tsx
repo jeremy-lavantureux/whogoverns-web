@@ -61,9 +61,11 @@ export default function WorldMap({ year, countries }: Props) {
     const style = doc.createElementNS(SVG_NS, "style");
     style.textContent = `
       .wg-country { cursor: pointer; transition: opacity .12s ease; }
-      .wg-country:hover { opacity: .90; }
-      .wg-covered { opacity: 1; }
-      .wg-not-covered { opacity: .22; }
+	  .wg-covered { opacity: 1; }
+	  .wg-not-covered { opacity: .22; }
+	  
+	  .wg-covered:hover { opacity: .90; }
+	  .wg-not-covered:hover { opacity: .35; }
     `;
     svg.insertBefore(style, svg.firstChild);
 
@@ -103,13 +105,21 @@ export default function WorldMap({ year, countries }: Props) {
 	root.addEventListener("mouseleave", hideTooltip);
 	window.addEventListener("scroll", hideTooltip, true);
 
-    const getIso3 = (e: any) => {
-      const el = e.target as HTMLElement | null;
-      if (!el) return null;
-      const iso3 = el.getAttribute("id");
-      if (!iso3 || iso3.length !== 3) return null;
-      return iso3.trim().toUpperCase();
-    };
+	const getIso3 = (e: any) => {
+	  const el = e.target as Element | null;
+	  if (!el) return null;
+
+	  // Remonte jusqu’à un élément SVG qui a un id
+	  const withId = el.closest("path[id], g[id]") as Element | null;
+	  if (!withId) return null;
+
+	  const raw = withId.getAttribute("id");
+	  if (!raw) return null;
+
+	  const iso3 = raw.trim().toUpperCase();
+	  if (iso3.length !== 3) return null;
+	  return iso3;
+	};
 
     const clamp = (v: number, min: number, max: number) =>
       Math.max(min, Math.min(max, v));
@@ -195,7 +205,7 @@ export default function WorldMap({ year, countries }: Props) {
       root.removeEventListener("click", onClick);
 
     };
-  }, [router, year, tt.visible, countryByIso3]);
+  }, [router, year, countryByIso3]);
 
   if (!svgMarkup) {
     return (
