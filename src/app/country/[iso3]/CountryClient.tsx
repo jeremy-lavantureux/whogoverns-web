@@ -58,6 +58,9 @@ export default function CountryClient({ iso3 }: { iso3: string }) {
 
     const from = year - 8;
     const to = year;
+	const fromDate = `${from}-01-01`;
+	const toDate = `${to}-12-31`;
+
 
     Promise.all([
       fetch(`${apiBase}/v1/country/${iso3}?year=${year}&from=${from}&to=${to}`).then(
@@ -70,10 +73,11 @@ export default function CountryClient({ iso3 }: { iso3: string }) {
         if (!r.ok) throw new Error(`timeline HTTP ${r.status}`);
         return r.json();
       }),
-      fetch(`${apiBase}/v1/events?country_iso3=${iso3}&from=${from}&to=${to}`).then(async (r) => {
-        if (!r.ok) throw new Error(`events HTTP ${r.status}`);
-        return r.json();
-      }),
+		fetch(`${apiBase}/v1/events?country_iso3=${iso3}&from=${fromDate}&to=${toDate}`).then(async (r) => {
+		if (!r.ok) throw new Error(`events HTTP ${r.status}`);
+		return r.json();
+		}),
+
     ])
       .then(([countryRes, timelineRes, eventsRes]) => {
         if (cancelled) return;
