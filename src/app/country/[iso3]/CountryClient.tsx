@@ -70,7 +70,7 @@ export default function CountryClient({ iso3 }: { iso3: string }) {
         if (!r.ok) throw new Error(`timeline HTTP ${r.status}`);
         return r.json();
       }),
-      fetch(`${apiBase}/v1/events/${iso3}?from=${from}&to=${to}`).then(async (r) => {
+      fetch(`${apiBase}/v1/events?country_iso3=${iso3}&from=${from}&to=${to}`).then(async (r) => {
         if (!r.ok) throw new Error(`events HTTP ${r.status}`);
         return r.json();
       }),
